@@ -1,49 +1,39 @@
-import { Input, Button } from "@chakra-ui/react";
 import { useEffect, useState, useRef } from "react";
-import { BsThreeDotsVertical } from "react-icons/bs";
-import { MdDelete } from "react-icons/md";
-import { IoCopy } from "react-icons/io5";
-import { BsCheckCircleFill } from "react-icons/bs";
-import { AiOutlineMinus } from "react-icons/ai";
-import { MdModeEdit } from "react-icons/md";
-import { BsPlusLg, BsCheckLg, BsCheck, BsClockFill } from "react-icons/bs";
-import tasklist from "../../api/tasklist";
+import Todo from "../Todo/Todo";
+import { useTodoListStore } from "../../store/store";
 
-const TodoList = ({
-  todoList,
-  deleteTodoList,
-  fetchTodoLists,
-  dragged,
-  setDragged,
-}) => {
-  const [optionsVisible, setOptionsVisible] = useState(false);
+const TodoList = ({ todoList }) => {
   const [opened, setOpened] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [tasklistTitle, setTasklistTitle] = useState(todoList.title);
-  const [title, setTitle] = useState("");
+  const [todoTitle, setTodoTitle] = useState("");
+  const [todoListTitle, setTodoListTitle] = useState(todoList.title);
   const [adding, setAdding] = useState(false);
-  const [clientX, setClientX] = useState(0);
-  const [clientY, setClientY] = useState(0);
 
-  const ref = useRef();
+  const deleteTodoList = useTodoListStore((state) => state.deleteTodoList);
+  const createTodo = useTodoListStore((state) => state.createTodo);
+  const editTodoList = useTodoListStore((state) => state.editTodoList);
+  //prettier-ignore
+  const moveDraggedTodoTo = useTodoListStore(state => state.moveDraggedTodoTo)
+  const createTodoList = useTodoListStore((state) => state.createTodoList);
+  //prettier-ignore
+  const toggleTodoListAndTodosComplete = useTodoListStore(state => state.toggleTodoListAndTodosComplete)
+
+  const titleRef = useRef();
+  const addTodoInputRef = useRef();
 
   useEffect(() => {
-    const handleKeyPress = async (e) => {
-      if (adding && e.key === "Enter") await addTask();
-      if (editing && e.key === "Enter") {
-        setTasklistTitle(ref.current.textContent.replace(/\n/gim, ""));
-        setEditing(false);
-        await tasklist.editTodoList(
-          { ...todoList, title: ref.current.textContent },
-          todoList.id
-        );
-        fetchTodoLists();
-        window.blur();
-      }
+    const handleKeyPress = (e) => {
+      if (
+        e.key === "Enter" &&
+        document.activeElement === addTodoInputRef.current
+      )
+        addTodo();
+      if (editing && e.key === "Enter") handleEditTodoList();
     };
 
     const handleClick = (e) => {
-      if (e.target.id !== "options") setOptionsVisible(false);
+      if (editing && document.activeElement !== titleRef.current)
+        handleEditTodoList();
     };
 
     window.addEventListener("keypress", handleKeyPress);
@@ -53,64 +43,56 @@ const TodoList = ({
       window.removeEventListener("keypress", handleKeyPress);
       window.removeEventListener("click", handleClick);
     };
-  }, [title, editing]);
+  });
 
-  const addTask = async () => {
-    console.log("adding", title);
-    await tasklist.createTodo(title, todoList.id);
-    setTitle("");
-    fetchTodoLists();
+  useEffect(() => {
+    if (adding && addTodoInputRef.current) addTodoInputRef.current.focus();
+  }, [adding, opened]);
+
+  useEffect(() => {
+    if (editing) titleRef.current.focus();
+  }, [editing]);
+
+  const handleEditTodoList = async () => {
+    setEditing(false);
+
+    if (todoListTitle.length) {
+      editTodoList({
+        ...todoList,
+        title: todoListTitle.replace(/\n/gim, ""),
+      });
+    }
+    window.blur();
   };
 
-  const handleOptionsClick = (e) => {
-    console.log(e);
-    setClientX(e.clientX);
-    setClientY(e.clientY);
-    e.stopPropagation();
-    setOptionsVisible((p) => !p);
+  const addTodo = () => {
+    createTodo(todoTitle, todoList.id);
+    setTodoTitle("");
   };
 
-  const copy = async (e) => {
-    e.stopPropagation();
-    setOptionsVisible(false);
-
-    await tasklist.copyTodoList({
+  const duplicateTodoList = async (e) => {
+    createTodoList({
       ...todoList,
       completed: false,
-      todos: todoList.todos.map((t) => ({ ...t, completed: false })),
+      todos: todoList.todos
+        ? todoList.todos.map((t) => ({ ...t, completed: false }))
+        : [],
     });
-
-    fetchTodoLists();
   };
 
-  const copyWithState = async (e) => {
-    e.stopPropagation();
-    setOptionsVisible(false);
-    await tasklist.copyTodoList(todoList);
-    fetchTodoLists();
+  const duplicateTodoListWithState = () => {
+    createTodoList(todoList);
   };
 
-  const deleteTodo = async (id) => {
-    await tasklist.deleteTodo(id);
-    fetchTodoLists();
-  };
-
-  const completeTodo = async (id) => {
-    await tasklist.completeTodo(id);
-    fetchTodoLists();
-  };
-
-  const completeTodoList = async (e) => {
-    e.stopPropagation();
-    setOptionsVisible(false);
-    const editedTodo = { ...todoList, completed: !todoList.completed };
-    delete editedTodo.todos;
-    const newTodoList = await tasklist.editTodoList(editedTodo, todoList.id);
-    fetchTodoLists();
+  const completeTodoList = async () => {
+    editTodoList({ ...todoList, completed: !todoList.completed });
   };
 
   const handleOpenClick = (e) => {
-    setOpened((p) => !p);
+    if (e.target.id !== "todolist") return;
+    if (!editing) {
+      setOpened((p) => !p);
+    }
   };
 
   const handleDeleteTodoList = async (e) => {
@@ -118,214 +100,126 @@ const TodoList = ({
     deleteTodoList(todoList.id);
   };
 
-  const handleDrop = async (e) => {
-    e.preventDefault();
-    await tasklist.moveTodoToList(dragged.id, todoList.id);
-    fetchTodoLists();
-    console.log("fetched");
+  const handleDrop = async () => {
+    moveDraggedTodoTo(todoList.id);
   };
 
-  const handleEditing = (e) => {
-    e.stopPropagation();
+  const toggleEditing = () => {
     setEditing((p) => !p);
+  };
+
+  const toggleAllComplete = async () => {
+    await toggleTodoListAndTodosComplete({
+      ...todoList,
+      completed: !todoList.completed,
+    });
   };
 
   return (
     <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
-      {optionsVisible && (
-        <div
-          id="options"
-          style={{
-            position: "fixed",
-            boxShadow: "0px 0px 3px 0px lightgrey",
-            marginBottom: "100%",
-            borderRadius: 8,
-            left: clientX - 50,
-            top: clientY + 10,
-            backgroundColor: "white",
-            padding: 4,
-            zIndex: Date.now(),
-            marginTop: 8,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-            }}
-            className="button"
-            onClick={handleDeleteTodoList}
-          >
-            <MdDelete />
-            <span style={{ marginLeft: 8 }}>Delete</span>
-          </div>
-          <div
-            style={{ display: "flex", alignItems: "center" }}
-            className="button"
-            id="edit-button"
-            onClick={handleEditing}
-          >
-            <MdModeEdit />
-            <span style={{ marginLeft: 8 }}>Edit</span>
-          </div>
-          <div
-            style={{ display: "flex", alignItems: "center" }}
-            className="button"
-            id="edit-button"
-            onClick={copy}
-          >
-            <IoCopy />
-            <span style={{ marginLeft: 8 }}>Duplicate</span>
-          </div>
-          <div
-            style={{ display: "flex", alignItems: "center" }}
-            className="button"
-            id="edit-button"
-            onClick={copyWithState}
-          >
-            <IoCopy />
-            <span style={{ marginLeft: 8 }}>Duplicate with state</span>
-          </div>
-          <div
-            style={{ display: "flex", alignItems: "center" }}
-            className="button"
-            onClick={completeTodoList}
-          >
-            <BsCheckLg style={{ fontSize: 14 }} />
-            <span style={{ marginLeft: 8 }}>
-              {todoList.completed ? "Incomplete" : "Complete"}
-            </span>
-          </div>
-        </div>
-      )}
       <div
+        id="todolist"
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDrop}
-        className="todolist"
+        className="px-4 py-2 my-1 w-full bg-base-100 rounded-xl flex items-center hover:bg-slate-800 cursor-pointer"
         onClick={handleOpenClick}
       >
         <div style={{ display: "flex", alignItems: "center" }}>
-          {todoList.completed ? (
-            <div>
-              <BsCheckCircleFill style={{ color: "green", opacity: 0.8 }} />
-            </div>
+          <input
+            checked={todoList.completed}
+            onChange={completeTodoList}
+            type="checkbox"
+            className="checkbox checkbox-primary mr-3"
+          />
+          {editing ? (
+            <input
+              value={todoListTitle}
+              ref={titleRef}
+              onChange={(e) => setTodoListTitle(e.target.value)}
+              class="input input-bordered w-full mr-2 h-8"
+            />
           ) : (
-            <div>
-              <BsClockFill style={{ color: "orange", opacity: 0.8 }} />
-            </div>
+            <span>{todoList.title}</span>
           )}
-          <div
-            className="todolist-title"
-            ref={ref}
-            style={{
-              border: editing && "1px solid grey",
-            }}
-            contentEditable={editing}
-          >
-            {tasklistTitle}
-          </div>
         </div>
 
-        <div>
-          <div style={{ display: "flex", alignItems: "center" }}>
-            <div onClick={handleOptionsClick} className="button">
-              <BsThreeDotsVertical />
-            </div>
-            <div
-              style={{
-                height: 20,
-                width: 20,
-                backgroundColor: "lightgrey",
-                opacity: 0.6,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 6,
-                fontSize: 14,
-                fontWeight: "bold",
-                marginLeft: 4,
-              }}
+        <div class="dropdown dropdown-end ml-auto m-1">
+          <button
+            tabindex="0"
+            class="btn btn-ghost btn-sm btn-square hover:bg-slate-700 rounded-md"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              fill="currentColor"
+              class="bi bi-three-dots-vertical"
+              viewBox="0 0 16 16"
             >
-              {todoList.todos ? todoList.todos.length : 0}
-            </div>
-          </div>
+              <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
+            </svg>
+          </button>
+          <ul
+            tabindex="0"
+            class="dropdown-content menu p-1 shadow bg-slate-900 mt-1 rounded-xl z-10 w-52 border border-slate-700"
+          >
+            <li onClick={handleDeleteTodoList}>
+              <a>Delete</a>
+            </li>
+
+            <li onClick={duplicateTodoList}>
+              <a>Duplicate</a>
+            </li>
+            <li onClick={duplicateTodoListWithState}>
+              <a>Duplicate with state</a>
+            </li>
+            <li onClick={toggleEditing}>
+              <a>Edit</a>
+            </li>
+            <li onClick={toggleAllComplete}>
+              <a>{todoList.completed ? "Incomplete all" : "Complete all"}</a>
+            </li>
+          </ul>
+        </div>
+        <div class="ml-1 btn-square btn-sm flex items-center justify-center font-semibold rounded-md bg-slate-800">
+          {todoList.todos.length}
         </div>
       </div>
+
       {opened && (
-        <div
-          style={{
-            padding: 8,
-            paddingLeft: 44,
-          }}
-        >
-          <div style={{ marginBottom: 8 }}>
-            {todoList.todos &&
-              todoList.todos.map((task) => (
-                <div
-                  className="todo"
-                  draggable={true}
-                  key={task.id}
-                  onDragStart={() => setDragged(task)}
-                >
-                  <div
-                    style={{
-                      textTransform: "capitalize",
-                      marginLeft: 8,
-                      color: task.completed ? "green" : "black",
-                      textDecoration: task.completed && "line-through",
-                    }}
-                  >
-                    {task.title}
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      marginRight: 4,
-                    }}
-                  >
-                    <div className="button" onClick={() => deleteTodo(task.id)}>
-                      <MdDelete />
-                    </div>
-                    <div
-                      className="button"
-                      style={{ padding: 3.25 }}
-                      onClick={() => completeTodo(task.id)}
-                    >
-                      <BsCheck style={{ fontSize: 24 }} />
-                    </div>
-                  </div>
-                </div>
-              ))}
-          </div>
+        <div className="w-11/12 ml-auto box-border">
+          {todoList.todos &&
+            todoList.todos.map((todo) => <Todo key={todo.id} todo={todo} />)}
           {adding ? (
-            <div style={{ display: "flex" }}>
-              <Button onClick={() => setAdding(false)}>
-                <AiOutlineMinus style={{ fontSize: 20 }} />
-              </Button>
-              <Input
-                style={{ marginLeft: 8, marginRight: 8 }}
-                onChange={(e) => setTitle(e.target.value)}
-                value={title}
-                type="text"
-              />
-            </div>
+            <input
+              ref={addTodoInputRef}
+              value={todoTitle}
+              onChange={(e) => setTodoTitle(e.target.value)}
+              placeholder="Add"
+              type="text"
+              className="input mt-auto input-bordered w-full min-h-[46px]"
+            />
           ) : (
-            <div
+            <button
+              className="btn btn-ghost hover:bg-slate-800 rounded-lg w-full px-2"
               onClick={() => setAdding(true)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                fontSize: 14,
-                fontWeight: "bold",
-                cursor: "pointer",
-              }}
             >
-              <Button>
-                <BsPlusLg style={{ opacity: 0.3 }} />
-              </Button>
-              <span style={{ marginLeft: 8 }}>Add todo</span>
-            </div>
+              <svg
+                className="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                ></path>
+              </svg>
+              <span className="mr-auto capitalize text-md">Add todo</span>
+            </button>
           )}
         </div>
       )}
@@ -333,22 +227,4 @@ const TodoList = ({
   );
 };
 
-const TodoLists = ({ todoLists, deleteTodoList, fetchTodoLists }) => {
-  const [dragged, setDragged] = useState();
-  return (
-    <div className="todolist-container">
-      {todoLists.map((todoList) => (
-        <TodoList
-          key={todoList.id}
-          todoList={todoList}
-          dragged={dragged}
-          setDragged={setDragged}
-          deleteTodoList={deleteTodoList}
-          fetchTodoLists={fetchTodoLists}
-        />
-      ))}
-    </div>
-  );
-};
-
-export default TodoLists;
+export default TodoList;

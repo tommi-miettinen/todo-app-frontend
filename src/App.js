@@ -1,58 +1,19 @@
-import { useState, useEffect } from "react";
 import LoginForm from "./components/LoginForm/LoginForm";
-import { ChakraProvider } from "@chakra-ui/react";
-import TodoLists from "./components/TodoList/TodoList";
-import TodoForm from "./components/TodoForm/TodoForm";
-import tasklist from "./api/tasklist";
+import TodoLists from "./components/TodoLists/TodoLists";
+import Navigation from "./components/Navigation/Navigation";
+import { useTodoListStore } from "./store/store";
 import "./App.css";
 
 const App = () => {
-  const [todoLists, setTodoLists] = useState([]);
-  const [loggedIn, setLoggedIn] = useState(localStorage.token ? true : false);
-
-  const fetchTodoLists = async () => {
-    const fetchedTodoLists = await tasklist.getTodoLists();
-    if (fetchedTodoLists) setTodoLists(fetchedTodoLists);
-  };
-
-  const deleteTodoList = async (id) => {
-    const deleted = await tasklist.deleteTodoList(id);
-    if (deleted) {
-      const todoListsWithoutDeleted = todoLists.filter(
-        (todoList) => todoList.id !== id
-      );
-      setTodoLists(todoListsWithoutDeleted);
-    }
-  };
-
-  const createTodo = async (title) => {
-    const todoList = await tasklist.createTodoList(title);
-    if (todoList) setTodoLists([...todoLists, todoList]);
-  };
-
-  useEffect(() => {
-    if (loggedIn) fetchTodoLists();
-  }, [loggedIn]);
-
-  console.log(todoLists);
+  const loggedIn = useTodoListStore((state) => state.loggedIn);
 
   return (
-    <ChakraProvider>
-      <div className="App">
-        {loggedIn ? (
-          <>
-            <TodoLists
-              todoLists={todoLists}
-              deleteTodoList={deleteTodoList}
-              fetchTodoLists={fetchTodoLists}
-            />
-            <TodoForm createTodo={createTodo} />
-          </>
-        ) : (
-          <LoginForm setLoggedIn={setLoggedIn} />
-        )}
+    <div className="h-screen bg-base-300 flex flex-col items-center">
+      <Navigation />
+      <div className="w-screen mt-4 sm:w-7/12 xl:w-3/12 rounded-xl h-2/3 bg-base-200 flex flex-col items-center justify-center">
+        {loggedIn ? <TodoLists /> : <LoginForm />}
       </div>
-    </ChakraProvider>
+    </div>
   );
 };
 
